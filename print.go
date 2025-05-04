@@ -84,3 +84,22 @@ func FormatString(state State, verb rune) string {
 	b = utf8.AppendRune(b, verb)
 	return string(b)
 }
+
+// Use simple []byte instead of bytes.Buffer to avoid large dependency.
+type buffer []byte
+
+func (b *buffer) write(p []byte) {
+	*b = append(*b, p...)
+}
+
+func (b *buffer) writeString(s string) {
+	*b = append(*b, s...)
+}
+
+func (b *buffer) writeByte(c byte) {
+	*b = append(*b, c)
+}
+
+func (b *buffer) writeRune(r rune) {
+	*b = utf8.AppendRune(*b, r)
+}
