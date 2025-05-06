@@ -146,3 +146,27 @@ func newPrinter() *pp {
 	p.fmt.init(&p.buf)
 	return p
 }
+
+// free saves used pp structs in ppFree; avoids an allocation per invocation.
+func (p *pp) free() {
+	// Proper usage of a sync.Pool requires each entry to have approximately
+	// the same memory cost. To obtain this property when the stored type
+	// contains a variably-sized buffer, we add a hard limit on the maximum
+	// buffer to place back in the pool. If the buffer is larger than the
+	// limit, we drop the buffer and recycle just the printer.
+	//
+	// See https://golang.org/issue/23199.
+	if cap(p.buf) > 64*1024 {
+		p.buf = nil
+	} else {
+		p.buf = p.buf[:0]
+	}
+	if cap(p.wrappedErrs) > 8 {
+		p.wrappedErrs = nil
+	}
+
+	p.arg = nil
+	p.value = reflect.Value{}
+	p.wrappedErrs = p.wrappedErrs[:0]
+	ppFree.Put(p)
+}
