@@ -5,6 +5,8 @@
 package fmt
 
 import (
+	"io"
+	"os"
 	"reflect"
 	"strconv"
 	"sync"
@@ -169,4 +171,148 @@ func (p *pp) free() {
 	p.value = reflect.Value{}
 	p.wrappedErrs = p.wrappedErrs[:0]
 	ppFree.Put(p)
+}
+
+func (p *pp) Width() (wid int, ok bool) { return p.fmt.wid, p.fmt.widPresent }
+
+func (p *pp) Precision() (prec int, ok bool) { return p.fmt.prec, p.fmt.precPresent }
+
+func (p *pp) Flag(b int) bool {
+	switch b {
+	case '-':
+		return p.fmt.minus
+	case '+':
+		return p.fmt.plus || p.fmt.plusV
+	case '#':
+		return p.fmt.sharp || p.fmt.sharpV
+	case ' ':
+		return p.fmt.space
+	case '0':
+		return p.fmt.zero
+	}
+	return false
+}
+
+// Write implements [io.Writer] so we can call [Fprintf] on a pp (through [State]), for
+// recursive use in custom verbs.
+func (p *pp) Write(b []byte) (ret int, err error) {
+	p.buf.write(b)
+	return len(b), nil
+}
+
+// WriteString implements [io.StringWriter] so that we can call [io.WriteString]
+// on a pp (through state), for efficiency.
+func (p *pp) WriteString(s string) (ret int, err error) {
+	p.buf.writeString(s)
+	return len(s), nil
+}
+
+// These routines end in 'f' and take a format string.
+
+// Fprintf formats according to a format specifier and writes to w.
+// It returns the number of bytes written and any write error encountered.
+func Fprintf(w io.Writer, format string, a ...any) (n int, err error) {
+	p := newPrinter()
+	p.doPrintf(format, a)
+	n, err = w.Write(p.buf)
+	p.free()
+	return
+}
+
+// Printf formats according to a format specifier and writes to standard output.
+// It returns the number of bytes written and any write error encountered.
+func Printf(format string, a ...any) (n int, err error) {
+	return Fprintf(os.Stdout, format, a...)
+}
+
+// Sprintf formats according to a format specifier and returns the resulting string.
+func Sprintf(format string, a ...any) string {
+	p := newPrinter()
+	p.doPrintf(format, a)
+	s := string(p.buf)
+	p.free()
+	return s
+}
+
+// These routines do not take a format string
+
+// Fprint formats using the default formats for its operands and writes to w.
+// Spaces are added between operands when neither is a string.
+// It returns the number of bytes written and any write error encountered.
+func Fprint(w io.Writer, a ...any) (n int, err error) {
+	p := newPrinter()
+	p.doPrint(a)
+	n, err = w.Write(p.buf)
+	p.free()
+	return
+}
+
+// Print formats using the default formats for its operands and writes to standard output.
+// Spaces are added between operands when neither is a string.
+// It returns the number of bytes written and any write error encountered.
+func Print(a ...any) (n int, err error) {
+	return Fprint(os.Stdout, a...)
+}
+
+// Sprint formats using the default formats for its operands and returns the resulting string.
+// Spaces are added between operands when neither is a string.
+func Sprint(a ...any) string {
+	p := newPrinter()
+	p.doPrint(a)
+	s := string(p.buf)
+	p.free()
+	return s
+}
+
+// Append formats using the default formats for its operands, appends the result to
+// the byte slice, and returns the updated slice.
+func Append(b []byte, a ...any) []byte {
+	p := newPrinter()
+	p.doPrint(a)
+	b = append(b, p.buf...)
+	p.free()
+	return b
+}
+
+// These routines end in 'ln', do not take a format string,
+// always add spaces between operands, and add a newline
+// after the last operand.
+
+// Fprintln formats using the default formats for its operands and writes to w.
+// Spaces are always added between operands and a newline is appended.
+// It returns the number of bytes written and any write error encountered.
+func Fprintln(w io.Writer, a ...any) (n int, err error) {
+	p := newPrinter()
+	p.doPrintln(a)
+	n, err = w.Write(p.buf)
+	p.free()
+	return
+}
+
+// Println formats using the default formats for its operands and writes to standard output.
+// Spaces are always added between operands and a newline is appended.
+// It returns the number of bytes written and any write error encountered.
+func Println(a ...any) (n int, err error) {
+	return Fprintln(os.Stdout, a...)
+}
+
+// Sprintln formats using the default formats for its operands and returns the resulting string.
+// Spaces are always added between operands and a newline is appended.
+func Sprintln(a ...any) string {
+	p := newPrinter()
+	p.doPrintln(a)
+	s := string(p.buf)
+	p.free()
+	return s
+}
+
+// Appendln formats using the default formats for its operands, appends the result
+// to the byte slice, and returns the updated slice. Spaces are always added
+// between operands and a newline is appended.
+func Appendln(b []byte, a ...any) []byte {
+	p := newPrinter()
+	p.doPrintln(a)
+	b = append(b, p.buf...)
+	p.free()
+	return b
 }
