@@ -316,3 +316,36 @@ func Appendln(b []byte, a ...any) []byte {
 	p.free()
 	return b
 }
+
+// getField gets the i'th field of the struct value.
+// If the field itself is a non-nil interface, return a value for
+// the thing inside the interface, not the interface itself.
+func getField(v reflect.Value, i int) reflect.Value {
+	val := v.Field(i)
+	if val.Kind() == reflect.Interface && !val.IsNil() {
+		val = val.Elem()
+	}
+	return val
+}
+
+// tooLarge reports whether the magnitude of the integer is
+// too large to be used as a formatting width or precision.
+func tooLarge(x int) bool {
+	const max int = 1e6
+	return x > max || x < -max
+}
+
+// parsenum converts ASCII to integer.  num is 0 (and isnum is false) if no number present.
+func parsenum(s string, start, end int) (num int, isnum bool, newi int) {
+	if start >= end {
+		return 0, false, end
+	}
+	for newi = start; newi < end && '0' <= s[newi] && s[newi] <= '9'; newi++ {
+		if tooLarge(num) {
+			return 0, false, end // Overflow; crazy long number most likely.
+		}
+		num = num*10 + int(s[newi]-'0')
+		isnum = true
+	}
+	return
+}
